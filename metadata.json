@@ -1,0 +1,5 @@
+{
+  "name": "Spotify Album Maker",
+  "description": "A fun mobile-view clone of a Spotify album page. Customize album art, titles, and artist names to see how your own project would look.",
+  "requestFramePermissions": []
+}
