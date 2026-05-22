@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { FastAverageColor } from 'fast-average-color';
-import { ChevronLeft, MoreHorizontal, Heart, Download, Play, Shuffle, Plus, Trash2, Image as ImageIcon, Check, PenSquare } from 'lucide-react';
+import { ChevronLeft, MoreHorizontal, Heart, Download, Play, Shuffle, Plus, Trash2, Image as ImageIcon, Check, PenSquare, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toPng } from 'html-to-image';
 
 const EditableText = ({ value, onChange, className, isEditing, singleLine = true }: any) => {
   if (!isEditing) return <span className={className}>{value}</span>;
@@ -32,14 +33,19 @@ const ExplicitIcon = () => (
 
 export default function App() {
   const [editMode, setEditMode] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const artistFileInputRef = useRef<HTMLInputElement>(null);
+  const albumRef = useRef<HTMLDivElement>(null);
   
   const [albumData, setAlbumData] = useState({
     title: 'ASTROWORLD',
     artist: 'Travis Scott',
     type: 'Album',
     year: '2018',
+    date: 'August 3, 2018',
+    label: '℗ 2018 Epic Records/Cactus Jack',
     coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=500&h=500',
     artistUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=500&h=500',
     color: '#654b38', // initial gradient color matching placeholder
@@ -52,6 +58,55 @@ export default function App() {
     { id: '4', title: 'R.I.P. SCREW', artist: 'Travis Scott, Swae Lee', explicit: false },
     { id: '5', title: 'STOP TRYING TO BE GOD', artist: 'Travis Scott', explicit: true },
   ]);
+
+  const downloadScreenshot = async () => {
+    if (!albumRef.current) return;
+    try {
+      setIsDownloading(true);
+      const container = albumRef.current;
+      const scrollableDiv = container.querySelector('.overflow-y-auto') as HTMLElement;
+      
+      if (!scrollableDiv) return;
+
+      // Save original styles
+      const originalContainerHeight = container.style.height;
+      const originalScrollableHeight = scrollableDiv.style.height;
+      const originalScrollableOverflow = scrollableDiv.style.overflow;
+      const originalContainerMaxHeight = container.style.maxHeight;
+      
+      // We need to calculate the actual height required for all content
+      // To ensure no content is hidden, we let the container expand to its scrollHeight
+      // First remove any height constraints
+      container.style.height = 'auto'; 
+      container.style.maxHeight = 'none';
+      scrollableDiv.style.height = 'max-content';
+      scrollableDiv.style.overflow = 'visible';
+
+      // Wait a bit for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const dataUrl = await toPng(container, {
+        quality: 1,
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      
+      // Restore styles
+      container.style.height = originalContainerHeight;
+      container.style.maxHeight = originalContainerMaxHeight;
+      scrollableDiv.style.height = originalScrollableHeight;
+      scrollableDiv.style.overflow = originalScrollableOverflow;
+
+      const link = document.createElement('a');
+      link.download = `${albumData.title.replace(/\s+/g, '-').toLowerCase()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to capture screenshot', err);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -101,7 +156,10 @@ export default function App() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#090909] sm:p-8 font-sans text-white">
       {/* Mobile Frame Container (Applies on tablet/desktop) */}
-      <div className="w-full h-full sm:h-[844px] sm:w-[390px] bg-black sm:rounded-[40px] sm:border-[8px] border-[#1a1a1a] relative overflow-hidden flex flex-col shadow-2xl selection:bg-[#1DB954] selection:text-black">
+      <div 
+        ref={albumRef}
+        className="w-full h-full sm:h-[844px] sm:w-[390px] bg-black sm:rounded-[40px] sm:border-[8px] border-[#1a1a1a] relative overflow-hidden flex flex-col shadow-2xl selection:bg-[#1DB954] selection:text-black"
+      >
         
         {/* Colorful Gradient Backdrop */}
         <div 
@@ -114,13 +172,10 @@ export default function App() {
         {/* Scrollable Content Area */}
         <div className="relative z-10 flex-col flex h-full overflow-y-auto scrollbar-hide">
           
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 pt-10 mb-6 sticky top-0 z-20">
+          {/* Header - Back button only */}
+          <div className="px-6 pt-10 mb-6 sticky top-0 z-50">
             <button className="rounded-full bg-black/20 p-1 hover:bg-black/40 transition-colors">
               <ChevronLeft className="w-6 h-6 text-white" />
-            </button>
-            <button className="rounded-full bg-black/20 p-2 hover:bg-black/40 transition-colors sm:hidden">
-              <MoreHorizontal className="w-5 h-5 text-white" />
             </button>
           </div>
 
@@ -195,12 +250,48 @@ export default function App() {
               <button>
                 <Heart className="w-6 h-6 text-[#1DB954] fill-[#1DB954]" />
               </button>
-              <button>
-                <Download className="w-5 h-5 text-[#b3b3b3]" />
+              <button 
+                onClick={downloadScreenshot} 
+                disabled={isDownloading} 
+                className="hover:text-white transition-colors disabled:opacity-50"
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-5 h-5 text-[#b3b3b3] animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5 text-[#b3b3b3]" />
+                )}
               </button>
-              <button className="hidden sm:block">
-                <MoreHorizontal className="w-6 h-6 text-[#b3b3b3]" />
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowMenu(!showMenu)} 
+                  className="hover:text-white transition-colors"
+                >
+                  <MoreHorizontal className="w-6 h-6 text-[#b3b3b3] hover:text-white transition-colors" />
+                </button>
+
+                <AnimatePresence>
+                  {showMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, transformOrigin: 'top left' }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.1 }}
+                      className="absolute left-0 mt-2 w-48 bg-[#282828] rounded-md shadow-2xl overflow-hidden border border-white/10 z-50"
+                    >
+                      <button
+                        onClick={() => {
+                          setEditMode(!editMode);
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/10 font-bold flex items-center gap-3 transition-colors"
+                      >
+                        {editMode ? <Check className="w-4 h-4" /> : <PenSquare className="w-4 h-4" />}
+                        {editMode ? 'Done Editing' : 'Customize Album'}
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <button>
@@ -294,35 +385,23 @@ export default function App() {
                 <Plus className="w-5 h-5" /> Add Track
               </motion.button>
             )}
+
+            {/* Album Footer (Date & Label) */}
+            <div className="mt-4 flex flex-col gap-1 text-[11px] text-[#a7a7a7] font-medium">
+              <EditableText 
+                isEditing={editMode} 
+                value={albumData.date} 
+                onChange={(val: string) => setAlbumData({...albumData, date: val})} 
+              />
+              <EditableText 
+                isEditing={editMode} 
+                value={albumData.label} 
+                onChange={(val: string) => setAlbumData({...albumData, label: val})} 
+                singleLine={false}
+              />
+            </div>
           </div>
         </div>
-
-        {/* Floating Customizer Toggle */}
-        <motion.div 
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 rounded-full shadow-2xl"
-          initial={{ y: 100 }} 
-          animate={{ y: 0 }}
-          transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.5 }}
-        >
-          <button 
-            onClick={() => setEditMode(!editMode)}
-            className={`flex items-center gap-2 px-6 py-3.5 rounded-full font-bold text-sm tracking-wide transition-all duration-300 ${
-              editMode 
-                ? 'bg-white text-black hover:scale-105' 
-                : 'bg-black/90 backdrop-blur-md text-white border border-white/10 hover:bg-gray-900 border-b-4 hover:border-b-white/20'
-            }`}
-          >
-            {editMode ? (
-              <>
-                <Check className="w-5 h-5" /> Done Editing
-              </>
-            ) : (
-              <>
-                <PenSquare className="w-5 h-5" /> Customize Album
-              </>
-            )}
-          </button>
-        </motion.div>
       </div>
     </div>
   );
